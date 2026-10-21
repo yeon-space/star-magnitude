@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>별 등급 실험실</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: 성도(星圖) 느낌의 단일 다크 화면. 가로 화면 기준 — 위: 시작 설정 + 드래그 그림, 아래: 측정값(왼) | 힌트(오).
+   색 약속: 겉보기등급 = 호박색, 절대등급 = 하늘색 (화면 전체에서 동일) */
+:root{
+  --bg:#0a0f1e; --panel:#111a2e; --panel2:#17213a; --line:#27345a; --ink:#e9edf8; --muted:#97a3c2;
+  --app:#ffc65c; --abs:#6fc3ff; --good:#5fd39a; --bad:#ff8080; --mid:#c6b8ff;
+  --f-display:"Black Han Sans","IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-body);font-size:16px;line-height:1.55;margin:0}
+.wrap{max-width:1280px;margin:0 auto;padding-block:10px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{text-wrap:balance;margin:0}
+h1{font-family:var(--f-display);font-weight:400;font-size:clamp(22px,2.6vw,28px);letter-spacing:.01em}
+h2{font-size:18px;font-weight:700}
+p{margin:0}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.ca{color:var(--app)} .cb{color:var(--abs)}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 24px;margin-bottom:8px}
+.sub{color:var(--muted);font-size:14px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{font:inherit;font-weight:700;font-size:15px;padding:7px 16px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.tab:focus-visible,button:focus-visible,input:focus-visible,svg:focus-visible{outline:2px solid var(--abs);outline-offset:2px}
+section[role="tabpanel"]{display:grid;gap:10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.label{font-size:13px;letter-spacing:.04em;color:var(--muted);font-weight:500}
+.chip{font:inherit;font-size:14px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);cursor:pointer}
+.chip:hover{border-color:var(--muted)}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip.ok{border-color:var(--good);color:var(--good)}
+.chip.no{border-color:var(--bad);color:var(--bad)}
+.chip.ans{box-shadow:0 0 0 2px var(--good) inset}
+.btn{font:inherit;font-weight:700;font-size:15px;padding:9px 16px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:var(--bg);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.small{font-size:14px;padding:6px 12px}
+.numin{font:inherit;font-family:var(--f-num);width:84px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.numin.ok{border-color:var(--good)} .numin.no{border-color:var(--bad)}
+.numin.calc{border-style:dashed;color:var(--mid)}
+.fb{font-size:15px;min-height:1.4em}
+.fb.ok{color:var(--good)} .fb.no{color:var(--bad)}
+
+/* 시작 설정 */
+.setup{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:6px 12px;border:1px dashed var(--line);border-radius:12px;font-size:14px}
+.setup label{display:flex;align-items:center;gap:6px}
+.setup .numin{width:84px;background:#fff;color:#141a33;border:2px solid #c9d2ec;font-size:17px;font-weight:600}
+.setup .numin::placeholder{color:#8a93b0;font-weight:400}
+.setup .numin:focus{border-color:var(--app)}
+.setup .numin.calc{background:#fff6d6;color:#5a3fd6;border-style:dashed;border-color:#b49cff}
+.setup .guide{font-size:14px;color:var(--ink)}
+.setup .guide b{color:var(--app)}
+
+/* 그림 */
+.diagram{background:radial-gradient(ellipse at 8% 50%,#14254a 0,var(--bg) 70%);border:1px solid var(--line);border-radius:14px;overflow:hidden;position:relative}
+.diagram svg{display:block;width:100%;height:auto;touch-action:none;cursor:ew-resize;user-select:none}
+#simSvg{max-height:max(200px,calc(100dvh - 370px))}
+.diagram .hint{position:absolute;right:14px;bottom:8px;font-size:13px;color:var(--muted);pointer-events:none}
+@media (max-width:640px){.diagram .hint{display:none}}
+
+/* 측정값 + 힌트 */
+.below{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:10px}
+.below>.panel{padding:12px 16px}
+.below h2{font-size:16px}
+@media (max-width:820px){.below{grid-template-columns:minmax(0,1fr)}}
+.measure{display:grid;gap:10px;align-content:start}
+.eq{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px 16px}
+.term{display:grid;justify-items:center;gap:0}
+.term .w{font-size:clamp(20px,2.2vw,26px);font-weight:700;line-height:1.2}
+.term .s{font-family:var(--f-num);font-size:16px;color:var(--muted)}
+.term.op .w{font-family:var(--f-num)}
+.box{min-width:64px;height:54px;padding:0 12px;border:3px solid var(--ink);border-radius:8px;display:grid;place-items:center;font-family:var(--f-num);font-size:36px;font-weight:600;line-height:1}
+.box.wide{font-size:30px;min-width:110px}
+.measure .dist{text-align:center;font-size:15px;color:var(--muted)}
+.measure .dist b{font-family:var(--f-num);color:var(--ink);font-weight:600}
+.hints ol{margin:8px 0 0;padding-left:26px;display:grid;gap:4px;font-size:17px;line-height:1.45}
+.hints li::marker{font-weight:700}
+.frac{display:inline-grid;vertical-align:middle;text-align:center;line-height:1.15;margin-left:4px}
+.frac span:first-child{border-bottom:2px solid currentColor;padding:0 6px}
+.hintcover{display:grid;place-items:center;gap:10px;min-height:150px;border:1px dashed var(--line);border-radius:10px;margin-top:8px;color:var(--muted);text-align:center;padding:14px}
+
+/* 별 5개 */
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:460px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center}
+th{font-size:13px;color:var(--muted);font-weight:500;letter-spacing:.03em}
+td.star{font-family:var(--f-display);font-size:20px}
+td .numin{width:80px;text-align:center}
+.solv{font-family:var(--f-num);color:var(--good);font-weight:600;margin-left:6px}
+.t4{border:2px solid var(--muted);font-size:18px}
+.t4 th,.t4 td{border:1px solid var(--line);padding:10px 12px}
+.t4 thead th{font-family:var(--f-display);font-size:22px;color:var(--ink);font-weight:400;background:var(--panel2)}
+.t4 thead th:first-child,.t4 tbody th{font-family:var(--f-body);font-size:16px;font-weight:700;background:var(--panel2);white-space:nowrap}
+.t4 td{font-family:var(--f-num);font-size:20px}
+.t4 .nm{display:block;font-family:var(--f-body);font-size:12px;color:var(--muted)}
+.diffs{display:flex;flex-wrap:wrap;gap:10px 22px;font-size:18px}
+.diffs label{display:flex;align-items:center;gap:6px;font-family:var(--f-display);font-size:20px}
+.hints{display:flex;flex-direction:column}
+.hints .hintcover{flex:1;min-height:120px}
+.qs{display:grid;gap:10px}
+.q{display:grid;grid-template-columns:minmax(0,240px) minmax(0,1fr);gap:8px 12px;align-items:center}
+@media (max-width:620px){.q{grid-template-columns:minmax(0,1fr)}}
+.q .mark{font-size:14px;font-weight:700}
+.slots{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.slot{width:46px;height:46px;border-radius:10px;border:1px dashed var(--line);display:grid;place-items:center;font-family:var(--f-display);font-size:21px;cursor:pointer;background:var(--panel2);color:var(--ink)}
+.slot.filled{border-style:solid;border-color:var(--muted)}
+.slot.ok{border-color:var(--good);color:var(--good)} .slot.no{border-color:var(--bad);color:var(--bad)}
+.arrow{color:var(--muted);font-size:14px}
+.solution{display:grid;gap:14px}
+.nl svg,.view svg{display:block;width:100%;height:auto}
+.views{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.view{border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#050811}
+.view p{padding:6px 10px;font-size:14px;background:var(--panel2)}
+.ratio{font-size:15px;margin-top:10px;display:grid;gap:4px}
+
+@media (prefers-reduced-motion:no-preference){.chip,.tab,.choice{transition:background .15s,border-color .15s,color .15s}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header>
+  <h1>별 등급 실험실</h1>
+  <nav class="tabs" role="tablist" aria-label="화면 선택">
+    <button class="tab" role="tab" id="tab-sim" aria-controls="sim" aria-selected="true">시뮬레이터</button>
+    <button class="tab" role="tab" id="tab-five" aria-controls="five" aria-selected="false">별 5개 비교</button>
+  </nav>
+</header>
+
+<!-- ============ 시뮬레이터 ============ -->
+<section role="tabpanel" id="sim" aria-labelledby="tab-sim">
+  <form class="setup" id="setup">
+    <span class="guide"><b>시작 설정</b> · 세 칸 중 <b>두 칸</b>을 입력하면 나머지 <b>한 칸은 자동 계산</b>돼요</span>
+    <label class="cb">절대등급 <input class="numin" id="sAbs" inputmode="decimal" autocomplete="off" placeholder="−2.5"></label>
+    <label class="ca">겉보기등급 <input class="numin" id="sApp" inputmode="decimal" autocomplete="off" placeholder="0.6"></label>
+    <label>거리 <input class="numin" id="sDist" inputmode="decimal" autocomplete="off" placeholder="41.7"> pc</label>
+    <button class="btn small" type="submit">적용</button>
+    <button class="btn small ghost" type="button" id="sClear">지우기</button>
+    <span class="fb" id="sMsg" style="font-size:14px"></span>
+  </form>
+
+  <div class="diagram">
+    <svg id="simSvg" viewBox="0 0 1000 250" tabindex="0" aria-label="지구와 별의 거리 그림. 좌우 화살표로 거리를 바꿀 수 있어요."></svg>
+    <span class="hint">그림 아무 곳이나 좌우로 끌기 · 키보드 ← →</span>
+  </div>
+
+  <div class="below">
+    <div class="panel measure" id="simMeasure" aria-live="polite"></div>
+    <div class="panel hints">
+      <div class="row" style="justify-content:space-between">
+        <h2>문제 풀 때 필요한 개념</h2>
+        <button class="btn small ghost" id="hintBtn" aria-expanded="false" aria-controls="hintList">힌트 열기</button>
+      </div>
+      <div class="hintcover" id="hintCover">먼저 스스로 생각해 보고, 막히면 힌트를 열어 보세요.</div>
+      <ol id="hintList" hidden>
+        <li>겉보기 밝기는 거리의 제곱에 반비례한다.</li>
+        <li>5등급 차이는 100배, 1등급 차이는 2.5배 밝기 차이</li>
+        <li>절대등급은 10 pc 기준</li>
+        <li>연주시차(″) = <span class="frac"><span>1</span><span>거리(pc)</span></span></li>
+        <li>등급 숫자가 작을수록 밝다.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 별 5개 비교 ============ -->
+<section role="tabpanel" id="five" aria-labelledby="tab-five" hidden>
+  <div class="panel" style="display:grid;gap:12px">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="fiveTitle">랜덤 별 5개</h2>
+      <div class="row">
+        <button class="btn" id="fiveNew">랜덤 별 5개</button>
+        <button class="btn ghost" id="fiveWS">활동지 4쪽</button>
+        <button class="btn ghost" id="fiveReal">실제 별 5개</button>
+        <button class="btn ghost" id="fiveEdit">값 직접 바꾸기</button>
+      </div>
+    </div>
+    <p>다음은 별 A~E의 겉보기등급과 절대등급을 나타낸 것이다.</p>
+    <div class="tbl"><table class="t4">
+      <thead><tr id="fiveHead"></tr></thead>
+      <tbody id="fiveBody"></tbody>
+    </table></div>
+    <h2>① 별 A~E의 (겉보기등급 − 절대등급)을 구하시오.</h2>
+    <div class="diffs" id="fiveDiffs"></div>
+    <div class="row"><button class="btn" id="chkDiff">① 확인</button><span class="fb" id="fbDiff"></span></div>
+  </div>
+
+  <div class="panel" style="display:grid;gap:12px">
+    <h2>② 해당하는 별을 모두 고르세요</h2>
+    <div class="qs" id="fiveQs"></div>
+    <div class="row"><button class="btn" id="chkQs">② 확인</button><span class="fb" id="fbQs"></span></div>
+  </div>
+
+  <div class="panel" style="display:grid;gap:12px">
+    <h2>③ 지구에서 가까운 별부터 순서대로 누르세요</h2>
+    <p class="sub">칸을 누르면 지워져요.</p>
+    <div class="row" id="orderPool"></div>
+    <div class="slots" id="orderSlots"></div>
+    <div class="row"><button class="btn" id="chkOrder">③ 확인</button><button class="btn ghost" id="resetOrder">다시 고르기</button><span class="fb" id="fbOrder"></span></div>
+  </div>
+
+  <div class="row"><button class="btn" id="showSol" aria-expanded="false">해답 보기</button><span class="sub">해답을 열면 별들이 실제 거리에 놓인 시뮬레이터가 나와요.</span></div>
+
+  <div class="solution" id="solution" hidden>
+    <div class="panel" style="display:grid;gap:8px">
+      <h2>해답</h2>
+      <div id="solText" style="display:grid;gap:4px;font-size:16px"></div>
+    </div>
+    <div class="row"><span class="label">움직일 별</span><span class="row" id="fiveSel"></span><button class="btn small ghost" id="fiveReset">처음 위치로</button></div>
+    <div class="diagram">
+      <svg id="fiveSvg" viewBox="0 0 1000 400" tabindex="0" aria-label="별 5개의 위치. 별을 끌어서 거리를 바꿀 수 있어요."></svg>
+      <span class="hint">별을 끌어 보세요 · 같은 호 위 = 지구에서 같은 거리</span>
+    </div>
+    <div class="below">
+      <div class="panel measure" id="fiveMeasure" aria-live="polite"></div>
+      <div class="panel">
+        <h2>등급 수직선 <span class="label" style="margin-left:6px">왼쪽일수록 밝다</span></h2>
+        <div class="nl"><svg id="nlSvg" viewBox="0 0 1000 130" aria-label="등급 수직선"></svg></div>
+        <div class="views">
+          <div class="view"><svg id="viewApp" viewBox="0 0 200 110" aria-hidden="true"></svg><p class="ca">지구에서 보이는 모습</p></div>
+          <div class="view"><svg id="viewAbs" viewBox="0 0 200 110" aria-hidden="true"></svg><p class="cb">10 pc에 옮겨 놓은 모습</p></div>
+        </div>
+        <div class="ratio" id="ratio"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(() => {
+const NS = 'http://www.w3.org/2000/svg';
+const DMIN = 1, DMAX = 1000;
+const EX = 70, RMAX = 900;
+const FONT = 'IBM Plex Sans KR, Malgun Gothic, sans-serif', MONO = 'IBM Plex Mono, Consolas, monospace';
+const $ = id => document.getElementById(id);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const r1 = x => { const v = Math.round(x * 10) / 10; return v === 0 ? 0 : v; };
+const fm = x => r1(x).toFixed(1).replace('-', '−');
+const fs = x => { const v = r1(x); return (v > 0 ? '+' : '') + fm(v); };
+const sig = x => Number(x.toPrecision(3)).toLocaleString('ko-KR', {maximumFractionDigits: 4});
+const appOf = (abs, d) => abs + 5 * Math.log10(d / 10);
+const dFrom = diff => 10 * Math.pow(10, diff / 5);
+const R = d => RMAX * Math.log10(1 + d) / Math.log10(1 + DMAX);
+const dOfR = r => Math.pow(10, r / RMAX * Math.log10(1 + DMAX)) - 1;
+const starR = mag => clamp(30 - 1.7 * (mag + 5), 3, 34);
+const starOp = mag => clamp(1.15 - mag / 14, 0.25, 1);
+const SNAPS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+const snap = d => { for (const s of SNAPS) if (Math.abs(Math.log10(d / s)) < 0.012) return s; return d; };
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const T = (parent, x, y, text, o = {}) => el('text', {x, y, fill: o.fill || '#e9edf8', 'font-size': o.size || 18, 'font-weight': o.weight || 400, 'text-anchor': o.anchor || 'start', 'font-family': o.font || FONT, opacity: o.op || 1}, parent, text);
+const opOf = (a, b) => { a = r1(a); b = r1(b); return a > b ? '>' : a < b ? '<' : '='; };
+const bigNum = x => x < 10 ? (Math.round(x * 10) / 10).toLocaleString('ko-KR') : Math.round(x).toLocaleString('ko-KR');
+function parseNum(v) {
+  v = String(v).trim().replace(/[−–—]/g, '-').replace(',', '.').replace(/^\+/, '');
+  if (v === '' || isNaN(Number(v))) return NaN;
+  return Number(v);
+}
+
+/* ---------- 그림 공통 ---------- */
+function defs(svg) {
+  const d = el('defs', {}, svg);
+  const mk = (id, c1, c2) => {
+    const g = el('radialGradient', {id}, d);
+    el('stop', {offset: '0', 'stop-color': '#ffffff', 'stop-opacity': '1'}, g);
+    el('stop', {offset: '0.25', 'stop-color': c1, 'stop-opacity': '.95'}, g);
+    el('stop', {offset: '0.6', 'stop-color': c2, 'stop-opacity': '.35'}, g);
+    el('stop', {offset: '1', 'stop-color': c2, 'stop-opacity': '0'}, g);
+  };
+  mk(svg.id + 'glow', '#fff1c9', '#ffc65c');
+  mk(svg.id + 'glowB', '#d9f0ff', '#6fc3ff');
+  const e = el('radialGradient', {id: svg.id + 'earth', cx: '.35', cy: '.35'}, d);
+  el('stop', {offset: '0', 'stop-color': '#9fe3ff'}, e);
+  el('stop', {offset: '1', 'stop-color': '#1f6fb5'}, e);
+}
+function drawStar(g, x, y, mag, svgId, blue) {
+  const r = starR(mag), op = starOp(mag);
+  el('circle', {cx: x, cy: y, r: r * 1.6, fill: `url(#${svgId}${blue ? 'glowB' : 'glow'})`, opacity: op}, g);
+  el('circle', {cx: x, cy: y, r: Math.max(1.6, r * 0.16), fill: '#ffffff', opacity: Math.min(1, op + .2)}, g);
+}
+function drawBase(svg, H, EY) {
+  svg.setAttribute('viewBox', `0 0 1000 ${H}`);
+  svg.innerHTML = '';
+  defs(svg);
+  const g = el('g', {}, svg);
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 90; i++) el('circle', {cx: rnd() * 1000, cy: rnd() * H, r: rnd() * 1.1 + .2, fill: '#c9d4f0', opacity: rnd() * .35 + .08}, g);
+  el('circle', {cx: EX, cy: EY, r: R(10), fill: '#6fc3ff', opacity: .06}, g);
+  [1, 100, 1000].forEach(d => {
+    el('circle', {cx: EX, cy: EY, r: R(d), fill: 'none', stroke: '#3a4a75', 'stroke-width': 1.4, 'stroke-dasharray': '3 6'}, g);
+    const end = EX + R(d) > 900;
+    T(g, EX + R(d) + (end ? -6 : 6), EY - 9, d + ' pc', {fill: '#8592b8', size: 16, font: MONO, anchor: end ? 'end' : 'start'});
+  });
+  el('circle', {cx: EX, cy: EY, r: R(10), fill: 'none', stroke: '#6fc3ff', 'stroke-width': 3, 'stroke-dasharray': '10 6'}, g);
+  const topX = EX + Math.sqrt(R(10) ** 2 - EY ** 2);
+  T(g, topX - 12, 24, '10 pc (절대등급 기준)', {fill: '#6fc3ff', size: 19, weight: 700, anchor: 'end'});
+  const botX = EX + Math.sqrt(R(10) ** 2 - (H - EY) ** 2);
+  T(g, botX - 14, H - 10, '← 10 pc보다 가깝다', {fill: '#6fc3ff', size: 16, anchor: 'end'});
+  T(g, botX + 14, H - 10, '10 pc보다 멀다 →', {fill: '#ffc65c', size: 16});
+  el('line', {x1: EX, y1: EY, x2: 995, y2: EY, stroke: '#3a4a75', 'stroke-width': 1}, g);
+  [2, 5, 20, 50, 200, 500].forEach(d => {
+    const x = EX + R(d);
+    el('line', {x1: x, y1: EY - 5, x2: x, y2: EY + 5, stroke: '#3a4a75'}, g);
+    T(g, x, EY + 24, d, {fill: '#5d6a92', size: 14, anchor: 'middle', font: MONO});
+  });
+  el('circle', {cx: EX, cy: EY, r: 16, fill: `url(#${svg.id}earth)`}, g);
+  T(g, EX, EY + 40, '지구', {size: 18, weight: 700, anchor: 'middle'});
+  return el('g', {}, svg);
+}
+
+/* ---------- 측정값 패널 ---------- */
+function renderMeasure(box, app, abs, d, name) {
+  const diff = r1(r1(app) - r1(abs));
+  box.innerHTML = `${name ? `<h2>${name}</h2>` : '<h2>측정값</h2>'}
+    <div class="eq">
+      <div class="term"><span class="w ca">겉보기등급</span><span class="s">${fm(app)}</span></div>
+      <div class="box">${opOf(app, abs)}</div>
+      <div class="term"><span class="w cb">절대등급</span><span class="s">${fm(abs)}</span></div>
+    </div>
+    <div class="eq">
+      <div class="term"><span class="w"><span class="ca">겉보기등급</span> − <span class="cb">절대등급</span> =</span><span class="s">${fm(app)} − ${r1(abs) < 0 ? "(" + fm(abs) + ")" : fm(abs)}</span></div>
+      <div class="box wide">${fs(diff)}</div>
+    </div>
+    <p class="dist">거리 <b>${sig(d)}</b> pc · 연주시차 <b>${sig(1 / d)}</b>″</p>`;
+}
+
+/* ---------- 드래그 시뮬레이터 ---------- */
+function makeSim(svg, multi, onChange, H, EY) {
+  const sim = {stars: [], sel: 0};
+  let dyn = drawBase(svg, H, EY), dragging = false;
+  const angleOf = (i, d) => {
+    if (!multi) return 0;
+    const spread = [-1, 1, -0.5, 0.5, 0][i % 5];
+    const rr = R(d);
+    return spread * Math.min(0.55, Math.asin(Math.min(1, (spread < 0 ? EY - 70 : H - EY - 100) / rr)));
+  };
+  sim.render = () => {
+    dyn.innerHTML = '';
+    if (!multi) {
+      const s = sim.stars[0], app = appOf(s.abs, s.d);
+      const a = -0.33, gx = EX + R(10) * Math.cos(a), gy = EY + R(10) * Math.sin(a);
+      const sx = EX + R(s.d), sy = EY;
+      el('line', {x1: sx, y1: sy, x2: gx, y2: gy, stroke: '#6fc3ff', 'stroke-dasharray': '2 6', opacity: .5}, dyn);
+      drawStar(dyn, gx, gy, s.abs, svg.id, true);
+      el('circle', {cx: gx, cy: gy, r: starR(s.abs) * .9 + 4, fill: 'none', stroke: '#6fc3ff', 'stroke-dasharray': '3 3', opacity: .8}, dyn);
+      T(dyn, gx + starR(s.abs) + 12, gy - 4, '10 pc로 옮기면', {fill: '#6fc3ff', size: 19, weight: 700});
+      T(dyn, gx + starR(s.abs) + 12, gy + 19, '절대등급 ' + fm(s.abs), {fill: '#6fc3ff', size: 19});
+      drawStar(dyn, sx, sy, app, svg.id, false);
+      el('circle', {cx: sx, cy: sy, r: 30, fill: 'none', stroke: '#ffc65c', 'stroke-width': 1.6, opacity: .75}, dyn);
+      const right = sx > 720, tx = right ? sx - 40 : sx + 40, an = right ? 'end' : 'start';
+      T(dyn, tx, sy - 36, '겉보기등급 ' + fm(app), {fill: '#ffc65c', size: 21, weight: 700, anchor: an});
+      T(dyn, tx, sy - 16, sig(s.d) + ' pc', {size: 18, anchor: an, font: MONO});
+      T(dyn, sx, sy + 62, '◀ 끌기 ▶', {fill: '#ffc65c', size: 15, anchor: 'middle', op: .8});
+    } else {
+      sim.stars.forEach((s, i) => {
+        const a = angleOf(i, s.d), rr = R(s.d), x = EX + rr * Math.cos(a), y = EY + rr * Math.sin(a);
+        s._x = x; s._y = y;
+        const app = appOf(s.abs, s.d), isSel = i === sim.sel;
+        if (isSel) {
+          const gx = EX + R(10) * Math.cos(a), gy = EY + R(10) * Math.sin(a);
+          el('line', {x1: EX, y1: EY, x2: x, y2: y, stroke: '#ffc65c', 'stroke-dasharray': '2 6', opacity: .45}, dyn);
+          if (Math.abs(rr - R(10)) > 20) {
+            drawStar(dyn, gx, gy, s.abs, svg.id, true);
+            el('circle', {cx: gx, cy: gy, r: starR(s.abs) * .9 + 4, fill: 'none', stroke: '#6fc3ff', 'stroke-dasharray': '3 3', opacity: .85}, dyn);
+            T(dyn, gx + (a < 0 ? -1 : 1) * 0 + starR(s.abs) + 8, gy + (a <= 0 ? -10 : 24), '10 pc에서 절대등급 ' + fm(s.abs), {fill: '#6fc3ff', size: 15, weight: 700});
+          }
+        }
+        drawStar(dyn, x, y, app, svg.id, false);
+        if (isSel) el('circle', {cx: x, cy: y, r: 30, fill: 'none', stroke: '#ffc65c', 'stroke-width': 2}, dyn);
+        const lx = x + Math.max(starR(app), 14) + 6, an = lx > 900 ? 'end' : 'start', tx = an === 'end' ? x - Math.max(starR(app), 14) - 6 : lx;
+        T(dyn, tx, y + 2, s.n, {size: 26, font: 'Black Han Sans, sans-serif', anchor: an, fill: isSel ? '#ffc65c' : '#e9edf8'});
+        T(dyn, tx, y + 22, sig(s.d) + ' pc', {size: 14, font: MONO, anchor: an, fill: '#c6b8ff'});
+      });
+    }
+    onChange && onChange(sim);
+  };
+  const pt = evt => { const p = svg.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+  const moveTo = evt => {
+    const p = pt(evt), s = sim.stars[sim.sel];
+    const r = multi ? Math.hypot(p.x - EX, p.y - EY) : Math.max(0, p.x - EX);
+    s.d = snap(clamp(dOfR(r), DMIN, DMAX));
+    sim.render();
+  };
+  svg.addEventListener('pointerdown', e => {
+    if (multi) {
+      const p = pt(e); let best = -1, bd = 70;
+      sim.stars.forEach((s, i) => { const dd = Math.hypot(p.x - s._x, p.y - s._y); if (dd < bd) { bd = dd; best = i; } });
+      if (best < 0) return;
+      sim.sel = best; sim.render();
+    }
+    dragging = true; svg.setPointerCapture(e.pointerId);
+    if (!multi) moveTo(e);
+  });
+  svg.addEventListener('pointermove', e => { if (dragging) moveTo(e); });
+  svg.addEventListener('pointerup', () => dragging = false);
+  svg.addEventListener('pointercancel', () => dragging = false);
+  svg.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const s = sim.stars[sim.sel];
+    s.d = clamp(s.d * Math.pow(10, (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 0.2 : 0.02)), DMIN, DMAX);
+    sim.render();
+  });
+  return sim;
+}
+
+/* ---------- 탭 1: 시뮬레이터 ---------- */
+const main = makeSim($('simSvg'), false, sim => {
+  const s = sim.stars[0];
+  renderMeasure($('simMeasure'), appOf(s.abs, s.d), s.abs, s.d);
+}, 250, 150);
+main.stars = [{abs: -2.5, d: dFrom(3.1)}];
+main.render();
+function setMain(abs, d) { main.stars[0].abs = clamp(r1(abs), -10, 15); main.stars[0].d = clamp(d, DMIN, DMAX); main.render(); }
+
+// 시작 설정: 마지막에 고친 두 칸으로 나머지 한 칸 계산
+const setupIds = ['sAbs', 'sApp', 'sDist'];
+let editOrder = [];
+setupIds.forEach(id => $(id).addEventListener('input', () => {
+  $(id).classList.remove('calc');
+  editOrder = editOrder.filter(x => x !== id);
+  if ($(id).value.trim() !== '') editOrder.push(id);
+}));
+$('setup').addEventListener('submit', e => {
+  e.preventDefault();
+  const msg = $('sMsg');
+  const filled = editOrder.filter(id => !isNaN(parseNum($(id).value)));
+  if (filled.length < 2) { msg.className = 'fb no'; msg.textContent = '세 칸 중 두 칸을 숫자로 채워 주세요.'; return; }
+  const use = filled.slice(-2), other = setupIds.find(id => !use.includes(id));
+  const v = id => parseNum($(id).value);
+  let abs, d;
+  if (other === 'sApp') { abs = v('sAbs'); d = v('sDist'); }
+  else if (other === 'sDist') { abs = v('sAbs'); d = dFrom(v('sApp') - abs); }
+  else { d = v('sDist'); abs = v('sApp') - 5 * Math.log10(d / 10); }
+  if (!(d >= DMIN && d <= DMAX)) { msg.className = 'fb no'; msg.textContent = `거리가 ${isFinite(d) && d > 0 ? sig(d) + ' pc' : '0 이하'}가 돼요. 1 ~ 1000 pc 사이만 그릴 수 있어요.`; return; }
+  if (abs < -10 || abs > 15) { msg.className = 'fb no'; msg.textContent = '절대등급은 −10 ~ 15 사이로 넣어 주세요.'; return; }
+  const calc = other === 'sApp' ? fm(appOf(abs, d)) : other === 'sDist' ? sig(d) : fm(abs);
+  $(other).value = calc.replace(/,/g, ''); $(other).classList.add('calc');
+  editOrder = editOrder.filter(x => x !== other);
+  setMain(abs, d);
+  msg.className = 'fb ok';
+  msg.textContent = `${{sAbs: "절대등급", sApp: "겉보기등급", sDist: "거리"}[other]} 값은 ${calc}${other === 'sDist' ? ' pc' : ''} 로 계산했어요.`;
+});
+$('sClear').onclick = () => { setupIds.forEach(id => { $(id).value = ''; $(id).classList.remove('calc'); }); editOrder = []; $('sMsg').textContent = ''; };
+
+$('hintBtn').onclick = () => {
+  const open = $('hintList').hidden;
+  $('hintList').hidden = !open; $('hintCover').hidden = open;
+  $('hintBtn').textContent = open ? '힌트 닫기' : '힌트 열기';
+  $('hintBtn').setAttribute('aria-expanded', open);
+};
+
+/* ---------- 탭 ---------- */
+const tabs = ['sim', 'five'];
+function showTab(id) {
+  tabs.forEach(t => { $(t).hidden = t !== id; $('tab-' + t).setAttribute('aria-selected', t === id); });
+  try { history.replaceState(null, '', '#' + id); } catch (e) {}
+}
+tabs.forEach(t => $('tab-' + t).addEventListener('click', () => showTab(t)));
+
+/* ---------- 탭 2: 별 5개 비교 ---------- */
+const WS = [
+  {n: 'A', app: 0.6, abs: -2.5}, {n: 'B', app: -0.5, abs: 1.2}, {n: 'C', app: 4.2, abs: -3.2},
+  {n: 'D', app: 0.1, abs: 3.3}, {n: 'E', app: 3.2, abs: 3.2}
+];
+const REAL = [['시리우스', 1.4, 2.64], ['베가', 0.6, 7.68], ['북극성', -3.6, 133], ['베텔게우스', -5.6, 168], ['데네브', -8.4, 800]];
+const realSet = () => shuffle(REAL).map((r, i) => ({n: 'ABCDE'[i], name: r[0], abs: r[1], app: r1(appOf(r[1], r[2]))}));
+const diffOf = s => r1(s.app - s.abs);
+let F = [], order = [], editing = false;
+const fiveQs = [
+  {t: '10 pc에 있는 별', f: s => diffOf(s) === 0},
+  {t: '10 pc보다 먼 별', f: s => diffOf(s) > 0},
+  {t: '10 pc보다 가까운 별', f: s => diffOf(s) < 0},
+  {t: '지구에서 가장 가까운 별', f: (s, a) => diffOf(s) === Math.min(...a.map(diffOf))},
+  {t: '지구에서 가장 먼 별', f: (s, a) => diffOf(s) === Math.max(...a.map(diffOf))},
+  {t: '지구에서 가장 밝게 보이는 별', f: (s, a) => s.app === Math.min(...a.map(x => x.app))},
+  {t: '실제로 가장 밝은 별', f: (s, a) => s.abs === Math.min(...a.map(x => x.abs))}
+];
+const sel = fiveQs.map(() => new Set());
+const fiveSim = makeSim($('fiveSvg'), true, sim => {
+  const s = sim.stars[sim.sel], app = appOf(s.abs, s.d);
+  renderMeasure($('fiveMeasure'), app, s.abs, s.d, '별 ' + s.n + (s.name ? ' · ' + s.name : ''));
+  renderNL(app, s.abs);
+  renderView($('viewApp'), app, false); renderView($('viewAbs'), s.abs, true);
+  renderRatio(app, s.abs, s.d);
+  $('fiveSel').querySelectorAll('.chip').forEach((c, i) => c.classList.toggle('on', i === sim.sel));
+}, 400, 200);
+
+function renderFive() {
+  $('fiveHead').innerHTML = '<th>별</th>' + F.map(s => `<th>${s.n}${s.name ? `<span class="nm">${s.name}</span>` : ''}</th>`).join('');
+  const cell = (s, i, k, cls) => editing ? `<td><input class="numin" id="fe${k}${i}" value="${fm(s[k]).replace('−', '-')}" inputmode="decimal" aria-label="별 ${s.n} ${k === 'app' ? '겉보기등급' : '절대등급'}"></td>` : `<td class="${cls}">${fm(s[k])}</td>`;
+  $('fiveBody').innerHTML = `<tr><th class="ca">겉보기등급</th>${F.map((s, i) => cell(s, i, 'app', 'ca')).join('')}</tr>
+    <tr><th class="cb">절대등급</th>${F.map((s, i) => cell(s, i, 'abs', 'cb')).join('')}</tr>`;
+  $('fiveDiffs').innerHTML = F.map((s, i) => `<label>${s.n} : <input class="numin" id="fd${i}" inputmode="decimal" aria-label="별 ${s.n}의 겉보기등급 − 절대등급" ${editing ? 'disabled' : ''}><span class="solv" id="fs${i}" hidden>${fs(diffOf(s))}</span></label>`).join('');
+  const qs = $('fiveQs'); qs.innerHTML = '';
+  fiveQs.forEach((q, qi) => {
+    sel[qi].clear();
+    const d = document.createElement('div'); d.className = 'q';
+    d.innerHTML = `<div><b>${q.t}</b> <span class="mark" id="qm${qi}"></span></div>`;
+    const r = document.createElement('div'); r.className = 'row';
+    F.forEach(s => {
+      const b = document.createElement('button'); b.className = 'chip'; b.textContent = s.n; b.dataset.n = s.n;
+      b.onclick = () => { sel[qi].has(s.n) ? sel[qi].delete(s.n) : sel[qi].add(s.n); b.classList.toggle('on'); b.classList.remove('ok', 'no'); };
+      r.appendChild(b);
+    });
+    d.appendChild(r); qs.appendChild(d);
+  });
+  order = []; renderOrder();
+  ['fbDiff', 'fbQs', 'fbOrder'].forEach(id => { $(id).textContent = ''; $(id).className = 'fb'; });
+  hideSol();
+  const fs2 = $('fiveSel'); fs2.innerHTML = '';
+  F.forEach((s, i) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = '별 ' + s.n; b.onclick = () => { fiveSim.sel = i; fiveSim.render(); }; fs2.appendChild(b); });
+}
+function setF(stars, title) { editing = false; $('fiveEdit').textContent = '값 직접 바꾸기'; F = stars; $('fiveTitle').textContent = title; renderFive(); }
+$('fiveEdit').onclick = () => {
+  if (!editing) { editing = true; $('fiveEdit').textContent = '이 값으로 문제 만들기'; renderFive(); $('fiveTitle').textContent = '값 직접 바꾸기'; return; }
+  const next = F.map((s, i) => ({n: s.n, app: r1(parseNum($('feapp' + i).value)), abs: r1(parseNum($('feabs' + i).value))}));
+  const bad = next.find(s => isNaN(s.app) || isNaN(s.abs));
+  if (bad) { $('fbDiff').className = 'fb no'; $('fbDiff').textContent = `별 ${bad.n}의 값을 숫자로 넣어 주세요.`; return; }
+  const far = next.find(s => dFrom(diffOf(s)) > DMAX || dFrom(diffOf(s)) < DMIN);
+  setF(next, '직접 만든 별 5개');
+  if (far) { $('fbDiff').className = 'fb no'; $('fbDiff').textContent = `별 ${far.n}은 1 ~ 1000 pc 밖이라 그림에서는 끝에 놓여요. 겉보기등급 − 절대등급을 −5 ~ +15 사이로 맞추면 정확히 그려져요.`; }
+};
+
+$('chkDiff').onclick = () => {
+  let ok = 0;
+  F.forEach((s, i) => {
+    const inp = $('fd' + i), good = Math.abs(parseNum(inp.value) - diffOf(s)) < 0.05;
+    inp.classList.toggle('ok', good); inp.classList.toggle('no', !good);
+    if (good) ok++;
+  });
+  const fb = $('fbDiff');
+  fb.className = 'fb ' + (ok === 5 ? 'ok' : 'no');
+  fb.textContent = ok === 5 ? '모두 맞았어요!' : `${ok}개 맞음. 빨간 칸을 다시 계산해요. 음수를 빼면 더하기가 돼요: 0.6 − (−2.5) = 0.6 + 2.5`;
+};
+const answerSet = qi => new Set(F.filter(s => fiveQs[qi].f(s, F)).map(s => s.n));
+$('chkQs').onclick = () => {
+  let all = true;
+  fiveQs.forEach((q, qi) => {
+    const ans = answerSet(qi);
+    $('fiveQs').children[qi].querySelectorAll('.chip').forEach(b => {
+      b.classList.remove('ok', 'no');
+      const n = b.dataset.n, picked = sel[qi].has(n), right = ans.has(n);
+      if (picked && right) b.classList.add('ok'); else if (picked !== right) b.classList.add('no');
+    });
+    const good = ans.size === sel[qi].size && [...ans].every(n => sel[qi].has(n));
+    if (!good) all = false;
+    const mk = $('qm' + qi);
+    mk.textContent = good ? '✓' : '✗'; mk.style.color = good ? 'var(--good)' : 'var(--bad)';
+  });
+  const fb = $('fbQs');
+  fb.className = 'fb ' + (all ? 'ok' : 'no');
+  fb.textContent = all ? '모두 맞았어요!' : '빨간 테두리는 잘못 골랐거나 빠뜨린 별이에요. "보이는 밝기"와 "실제 밝기"는 각각 어떤 등급으로 비교할까요?';
+};
+function renderOrder() {
+  const pool = $('orderPool'); pool.innerHTML = '';
+  F.forEach(s => {
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = '별 ' + s.n;
+    b.disabled = order.includes(s.n); if (b.disabled) b.style.opacity = .35;
+    b.onclick = () => { if (order.length < 5) { order.push(s.n); renderOrder(); } };
+    pool.appendChild(b);
+  });
+  const sl = $('orderSlots'); sl.innerHTML = '<span class="arrow">가까움</span>';
+  for (let i = 0; i < 5; i++) {
+    const b = document.createElement('button'); b.className = 'slot' + (order[i] ? ' filled' : '');
+    b.textContent = order[i] || (i + 1); if (!order[i]) b.style.color = 'var(--muted)';
+    b.setAttribute('aria-label', `${i + 1}번째 ${order[i] || '빈 칸'}`);
+    b.onclick = () => { if (order[i]) { order.splice(i, 1); renderOrder(); } };
+    sl.appendChild(b);
+    if (i < 4) sl.insertAdjacentHTML('beforeend', '<span class="arrow">→</span>');
+  }
+  sl.insertAdjacentHTML('beforeend', '<span class="arrow">멂</span>');
+  $('fbOrder').textContent = ''; $('fbOrder').className = 'fb';
+}
+const answerOrder = () => [...F].sort((a, b) => diffOf(a) - diffOf(b)).map(s => s.n);
+$('resetOrder').onclick = () => { order = []; renderOrder(); };
+$('chkOrder').onclick = () => {
+  const ans = answerOrder(), fb = $('fbOrder');
+  if (order.length < 5) { fb.className = 'fb no'; fb.textContent = '5개를 모두 골라 주세요.'; return; }
+  let ok = 0;
+  $('orderSlots').querySelectorAll('.slot').forEach((b, i) => { const g = order[i] === ans[i]; b.classList.add(g ? 'ok' : 'no'); if (g) ok++; });
+  fb.className = 'fb ' + (ok === 5 ? 'ok' : 'no');
+  fb.textContent = ok === 5 ? '정답! 해답 보기를 눌러 그림으로 확인해 보세요.' : '겉보기등급 − 절대등급 값을 작은 것부터 늘어놓아 보세요. 음수가 가장 작아요.';
+};
+
+function hideSol() { $('solution').hidden = true; $('showSol').textContent = '해답 보기'; $('showSol').setAttribute('aria-expanded', 'false'); }
+function placeFive() { fiveSim.stars = F.map(s => ({...s, d: clamp(dFrom(diffOf(s)), DMIN, DMAX)})); }
+$('showSol').onclick = () => {
+  if (!$('solution').hidden) { hideSol(); F.forEach((s, i) => $('fs' + i).hidden = true); $('fiveQs').querySelectorAll('.chip').forEach(c => c.classList.remove('ans')); return; }
+  $('solution').hidden = false; $('showSol').textContent = '해답 숨기기'; $('showSol').setAttribute('aria-expanded', 'true');
+  F.forEach((s, i) => $('fs' + i).hidden = false);
+  fiveQs.forEach((q, qi) => { const ans = answerSet(qi); $('fiveQs').children[qi].querySelectorAll('.chip').forEach(c => c.classList.toggle('ans', ans.has(c.dataset.n))); });
+  const ord = answerOrder();
+  $('solText').innerHTML = `
+    <div>겉보기등급 − 절대등급: ${F.map(s => `<b>${s.n}</b> <span class="num">${fs(diffOf(s))}</span>`).join(' · ')}</div>
+    <div>0 이면 10 pc, 양수면 10 pc보다 멀고, 음수면 10 pc보다 가까워요. 값이 클수록 멀어요.</div>
+    <div>② 정답은 위의 별 버튼에 초록 테두리로 표시했어요.</div>
+    <div>③ 가까운 순서: <b class="num">${ord.join(' → ')}</b></div>`;
+  placeFive(); fiveSim.sel = F.findIndex(s => s.n === ord[0]); fiveSim.render();
+  $('solution').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'});
+};
+$('fiveReset').onclick = () => { const k = fiveSim.sel; placeFive(); fiveSim.sel = k; fiveSim.render(); };
+
+function renderNL(app, abs) {
+  const svg = $('nlSvg'); svg.innerHTML = '';
+  const d = el('defs', {}, svg);
+  const lg = el('linearGradient', {id: 'nlg', x1: '0', x2: '1', y1: '0', y2: '0'}, d);
+  el('stop', {offset: '0', 'stop-color': '#fff6dc'}, lg);
+  el('stop', {offset: '.35', 'stop-color': '#8a7a52'}, lg);
+  el('stop', {offset: '1', 'stop-color': '#0c1122'}, lg);
+  const lo = -10, hi = 15, X = v => 40 + (clamp(v, lo, hi) - lo) / (hi - lo) * 920;
+  el('rect', {x: 40, y: 56, width: 920, height: 14, rx: 7, fill: 'url(#nlg)', stroke: '#27345a'}, svg);
+  for (let v = lo; v <= hi; v++) {
+    el('line', {x1: X(v), y1: 70, x2: X(v), y2: v % 5 === 0 ? 80 : 75, stroke: '#56638a'}, svg);
+    if (v % 5 === 0) T(svg, X(v), 98, String(v).replace('-', '−'), {fill: '#97a3c2', size: 16, anchor: 'middle', font: MONO});
+  }
+  T(svg, 40, 126, '← 밝다 (숫자 작음)', {size: 16, weight: 700});
+  T(svg, 960, 126, '어둡다 (숫자 큼) →', {fill: '#97a3c2', size: 16, weight: 700, anchor: 'end'});
+  const xa = X(app), xb = X(abs);
+  if (Math.abs(xa - xb) > 2) el('line', {x1: xb, y1: 63, x2: xa, y2: 63, stroke: '#c6b8ff', 'stroke-width': 4, opacity: .9}, svg);
+  el('path', {d: `M${xa} 52 l-9 -14 h18 z`, fill: '#ffc65c'}, svg);
+  T(svg, xa, 30, '겉보기 ' + fm(app), {fill: '#ffc65c', size: 16, weight: 700, anchor: 'middle'});
+  el('path', {d: `M${xb} 74 l-9 14 h18 z`, fill: '#6fc3ff'}, svg);
+  T(svg, xb, 112, '절대 ' + fm(abs), {fill: '#6fc3ff', size: 16, weight: 700, anchor: 'middle'});
+}
+function renderView(svg, mag, blue) {
+  svg.innerHTML = ''; defs(svg);
+  let seed = 3;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 18; i++) el('circle', {cx: rnd() * 200, cy: rnd() * 110, r: rnd() * .7 + .2, fill: '#c9d4f0', opacity: .3}, svg);
+  drawStar(svg, 100, 55, mag, svg.id, blue);
+}
+function renderRatio(app, abs, d) {
+  const diff = r1(r1(app) - r1(abs)), k = d / 10, rt = $('ratio');
+  if (diff === 0) rt.innerHTML = '<div>10 pc에 있으니 두 모습의 밝기가 같아요. 그래서 겉보기등급 = 절대등급이에요.</div>';
+  else if (k > 1) rt.innerHTML = `<div>거리가 10 pc의 <b>${bigNum(k)}배</b> → 밝기는 거리 제곱에 반비례 → 10 pc일 때의 <b>1/${bigNum(k * k)}</b> 로 어두워져요.</div><div>어두워졌으니 등급 숫자가 <b class="num">${fm(diff)}</b> 만큼 커져요.</div>`;
+  else { const kk = 10 / d; rt.innerHTML = `<div>거리가 10 pc의 <b>1/${bigNum(kk)}</b> → 밝기는 <b>${bigNum(kk * kk)}배</b> 밝아져요.</div><div>밝아졌으니 등급 숫자가 <b class="num">${fm(-diff)}</b> 만큼 작아져요.</div>`; }
+}
+
+function newFive() {
+  // 10 pc보다 가까운 별 2개, 먼 별 2개, 10 pc인 별 1개
+  const pick = (lo, hi) => Math.round((lo + Math.random() * (hi - lo)) * 10) / 10;
+  const two = (lo, hi) => { let a, b; do { a = pick(lo, hi); b = pick(lo, hi); } while (Math.abs(a - b) < 0.8); return [a, b]; };
+  for (let tries = 0; tries < 500; tries++) {
+    const diffs = [0, ...two(-4.5, -0.5), ...two(0.5, 8)];
+    const stars = shuffle(diffs).map((df, i) => { const abs = Math.round((Math.random() * 9 - 4) * 10) / 10; return {n: 'ABCDE'[i], abs, app: r1(abs + df)}; });
+    const as = stars.map(s => s.app), bs = stars.map(s => s.abs);
+    if (new Set(as).size < 5 || new Set(bs).size < 5) continue;
+    if (stars.find(s => s.app === Math.min(...as)) === stars.find(s => s.abs === Math.min(...bs)) && tries < 400) continue;
+    return stars;
+  }
+  return WS.map(s => ({...s}));
+}
+$('fiveNew').onclick = () => setF(newFive(), '랜덤 별 5개');
+$('fiveWS').onclick = () => setF(WS.map(s => ({...s})), '활동지 4쪽 · 별 A~E');
+$('fiveReal').onclick = () => setF(realSet(), '실제 별 5개 (근삿값)');
+
+function shuffle(arr) { return arr.map(v => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(v => v[1]); }
+
+/* ---------- 시작 ---------- */
+setF(newFive(), '랜덤 별 5개');
+if (tabs.includes(location.hash.slice(1))) showTab(location.hash.slice(1));
+})();
+</script>
+</body>
+</html>
