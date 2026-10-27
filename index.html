@@ -51,6 +51,9 @@ section[role="tabpanel"]{display:grid;gap:10px}
 .btn.small{font-size:14px;padding:6px 12px}
 .numin{font:inherit;font-family:var(--f-num);width:84px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
 .numin.ok{border-color:var(--good)} .numin.no{border-color:var(--bad)}
+.pm{font-family:var(--f-num);font-size:20px;font-weight:600;line-height:1;width:40px;height:36px;margin-left:4px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);cursor:pointer;touch-action:manipulation}
+.pm:active{background:var(--ink);color:var(--bg)}
+.pm:disabled{opacity:.35;cursor:default}
 .numin.calc{border-style:dashed;color:var(--mid)}
 .fb{font-size:15px;min-height:1.4em}
 .fb.ok{color:var(--good)} .fb.no{color:var(--bad)}
@@ -145,8 +148,8 @@ td .numin{width:80px;text-align:center}
 <section role="tabpanel" id="sim" aria-labelledby="tab-sim">
   <form class="setup" id="setup">
     <span class="guide"><b>시작 설정</b> · 세 칸 중 <b>두 칸</b>을 입력하면 나머지 <b>한 칸은 자동 계산</b>돼요</span>
-    <label class="cb">절대등급 <input class="numin" id="sAbs" inputmode="decimal" autocomplete="off" placeholder="−2.5"></label>
-    <label class="ca">겉보기등급 <input class="numin" id="sApp" inputmode="decimal" autocomplete="off" placeholder="0.6"></label>
+    <label class="cb">절대등급 <input class="numin" id="sAbs" inputmode="decimal" autocomplete="off" placeholder="−2.5"><button type="button" class="pm" data-for="sAbs" aria-label="절대등급 부호 바꾸기">±</button></label>
+    <label class="ca">겉보기등급 <input class="numin" id="sApp" inputmode="decimal" autocomplete="off" placeholder="0.6"><button type="button" class="pm" data-for="sApp" aria-label="겉보기등급 부호 바꾸기">±</button></label>
     <label>거리 <input class="numin" id="sDist" inputmode="decimal" autocomplete="off" placeholder="41.7"> pc</label>
     <button class="btn small" type="submit">적용</button>
     <button class="btn small ghost" type="button" id="sClear">지우기</button>
@@ -465,6 +468,19 @@ $('setup').addEventListener('submit', e => {
 });
 $('sClear').onclick = () => { setupIds.forEach(id => { $(id).value = ''; $(id).classList.remove('calc'); }); editOrder = []; $('sMsg').textContent = ''; };
 
+// ± 버튼: 숫자 키패드에 '-'가 없는 태블릿용. 입력값의 부호를 바꿈(비어 있으면 '-'로 시작)
+document.addEventListener('click', e => {
+  const b = e.target.closest('.pm');
+  if (!b || b.disabled) return;
+  const inp = $(b.dataset.for);
+  if (!inp) return;
+  let v = inp.value.trim().replace(/^[−–—]/, '-');
+  v = v.startsWith('-') ? v.slice(1) : '-' + v;
+  inp.value = v;
+  inp.dispatchEvent(new Event('input', {bubbles: true}));
+  inp.focus();
+  try { inp.setSelectionRange(v.length, v.length); } catch (err) {}
+});
 $('hintBtn').onclick = () => {
   const open = $('hintList').hidden;
   $('hintList').hidden = !open; $('hintCover').hidden = open;
@@ -510,10 +526,10 @@ const fiveSim = makeSim($('fiveSvg'), true, sim => {
 
 function renderFive() {
   $('fiveHead').innerHTML = '<th>별</th>' + F.map(s => `<th>${s.n}${s.name ? `<span class="nm">${s.name}</span>` : ''}</th>`).join('');
-  const cell = (s, i, k, cls) => editing ? `<td><input class="numin" id="fe${k}${i}" value="${fm(s[k]).replace('−', '-')}" inputmode="decimal" aria-label="별 ${s.n} ${k === 'app' ? '겉보기등급' : '절대등급'}"></td>` : `<td class="${cls}">${fm(s[k])}</td>`;
+  const cell = (s, i, k, cls) => editing ? `<td><input class="numin" id="fe${k}${i}" value="${fm(s[k]).replace('−', '-')}" inputmode="decimal" aria-label="별 ${s.n} ${k === 'app' ? '겉보기등급' : '절대등급'}"><button type="button" class="pm" data-for="fe${k}${i}" aria-label="부호 바꾸기">±</button></td>` : `<td class="${cls}">${fm(s[k])}</td>`;
   $('fiveBody').innerHTML = `<tr><th class="ca">겉보기등급</th>${F.map((s, i) => cell(s, i, 'app', 'ca')).join('')}</tr>
     <tr><th class="cb">절대등급</th>${F.map((s, i) => cell(s, i, 'abs', 'cb')).join('')}</tr>`;
-  $('fiveDiffs').innerHTML = F.map((s, i) => `<label>${s.n} : <input class="numin" id="fd${i}" inputmode="decimal" aria-label="별 ${s.n}의 겉보기등급 − 절대등급" ${editing ? 'disabled' : ''}><span class="solv" id="fs${i}" hidden>${fs(diffOf(s))}</span></label>`).join('');
+  $('fiveDiffs').innerHTML = F.map((s, i) => `<label>${s.n} : <input class="numin" id="fd${i}" inputmode="decimal" aria-label="별 ${s.n}의 겉보기등급 − 절대등급" ${editing ? 'disabled' : ''}><button type="button" class="pm" data-for="fd${i}" aria-label="별 ${s.n} 부호 바꾸기" ${editing ? 'disabled' : ''}>±</button><span class="solv" id="fs${i}" hidden>${fs(diffOf(s))}</span></label>`).join('');
   const qs = $('fiveQs'); qs.innerHTML = '';
   fiveQs.forEach((q, qi) => {
     sel[qi].clear();
